@@ -9,9 +9,20 @@ import './access/Ownable.sol';
 
 
 interface IMigratorChef {
+	 
+		
+  
+  
+  
+		
+		
+		
+  
     function migrate(IBEP20 token) external returns (IBEP20);
 }
 
+	  
+  
 // Note that it's ownable and the owner wields tremendous power. The ownership
 // will be transferred to a governance smart contract once XTT is sufficiently
 // distributed and the community can show to govern itself.
@@ -49,6 +60,9 @@ contract MasterChef is Ownable {
     // The XTT TOKEN!
     IBEP20 public xtt;
    
+  
+  
+  
     // XTT tokens created per block.
     uint256 public xttPerBlock;
     // Bonus muliplier for early xtt makers.
@@ -70,12 +84,17 @@ contract MasterChef is Ownable {
     event EmergencyWithdraw(address indexed user, uint256 indexed pid, uint256 amount);
 
     constructor(
+		// We will use XTT instead of CakeToken
         IBEP20 _xtt,
+		// We do not need this token
+		// SyrupBar _syrup,
         uint256 _xttPerBlock,
         uint256 _startBlock
     ) public {
         xtt = _xtt;
         xttPerBlock = _xttPerBlock;
+  
+  
         startBlock = _startBlock;
 
         // staking pool
@@ -120,6 +139,7 @@ contract MasterChef is Ownable {
         if (_withUpdate) {
             massUpdatePools();
         }
+	  
         uint256 prevAllocPoint = poolInfo[_pid].allocPoint;
         poolInfo[_pid].allocPoint = _allocPoint;
         if (prevAllocPoint != _allocPoint) {
@@ -199,6 +219,10 @@ contract MasterChef is Ownable {
         }
         uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
         uint256 xttReward = multiplier.mul(xttPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
+		// Do not need to mint more tokens
+		// cake.mint(devaddr, cakeReward.div(10));
+        // cake.mint(address(syrup), cakeReward);
+  
         pool.accXttPerShare = pool.accXttPerShare.add(xttReward.mul(1e12).div(lpSupply));
         pool.lastRewardBlock = block.number;
     }
@@ -229,6 +253,7 @@ contract MasterChef is Ownable {
     function withdraw(uint256 _pid, uint256 _amount) public {
 
         require (_pid != 0, 'withdraw XTT by unstaking');
+
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         require(user.amount >= _amount, "withdraw: not good");
@@ -262,7 +287,7 @@ contract MasterChef is Ownable {
             user.amount = user.amount.add(_amount);
         }
         user.rewardDebt = user.amount.mul(pool.accXttPerShare).div(1e12);
-
+		// Do not need to mint this token
         // syrup.mint(msg.sender, _amount);
         emit Deposit(msg.sender, 0, _amount);
     }
@@ -282,7 +307,7 @@ contract MasterChef is Ownable {
             pool.lpToken.safeTransfer(address(msg.sender), _amount);
         }
         user.rewardDebt = user.amount.mul(pool.accXttPerShare).div(1e12);
-
+		// Do not need to burn this token
         // syrup.burn(msg.sender, _amount);
         emit Withdraw(msg.sender, 0, _amount);
     }
@@ -302,3 +327,10 @@ contract MasterChef is Ownable {
         xtt.safeTransfer(_to, _amount);
     }
 }
+
+  
+  
+  
+  
+  
+ 
