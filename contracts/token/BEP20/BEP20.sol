@@ -3,7 +3,7 @@
 pragma solidity >=0.4.0;
 
 import '../../access/Ownable.sol';
-import '../../GSN/Context.sol';
+// import '../../GSN/Context.sol';
 import './IBEP20.sol';
 import '../../math/SafeMath.sol';
 import '../../utils/Address.sol';
@@ -209,10 +209,13 @@ contract BEP20 is Context, IBEP20, Ownable {
      *
      * - `msg.sender` must be the token owner
      */
+
+     /*
     function mint(uint256 amount) public onlyOwner returns (bool) {
         _mint(_msgSender(), amount);
         return true;
     }
+    */
 
     /**
      * @dev Moves tokens `amount` from `sender` to `recipient`.
@@ -250,6 +253,7 @@ contract BEP20 is Context, IBEP20, Ownable {
      *
      * - `to` cannot be the zero address.
      */
+     /*
     function _mint(address account, uint256 amount) internal {
         require(account != address(0), 'BEP20: mint to the zero address');
 
@@ -257,6 +261,7 @@ contract BEP20 is Context, IBEP20, Ownable {
         _balances[account] = _balances[account].add(amount);
         emit Transfer(address(0), account, amount);
     }
+    */
 
     /**
      * @dev Destroys `amount` tokens from `account`, reducing the
