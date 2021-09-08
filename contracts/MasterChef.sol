@@ -9,14 +9,6 @@ import './access/Ownable.sol';
 
 
 interface IMigratorChef {
-	 
-		
-  
-  
-  
-		
-		
-		
   
     function migrate(IBEP20 token) external returns (IBEP20);
 }
@@ -58,10 +50,7 @@ contract MasterChef is Ownable {
     }
 
     // The XTT TOKEN!
-    IBEP20 public xtt;
-   
-  
-  
+    IBEP20 public xtt;  
   
     // XTT tokens created per block.
     uint256 public xttPerBlock;
@@ -86,8 +75,14 @@ contract MasterChef is Ownable {
     constructor(
 		// We will use XTT instead of CakeToken
         IBEP20 _xtt,
-		// We do not need this token
+        /*
+        Modified
+		We do not need this token
+        */
 		// SyrupBar _syrup,
+        /*
+        End modified
+        */
         uint256 _xttPerBlock,
         uint256 _startBlock
     ) public {
@@ -219,9 +214,15 @@ contract MasterChef is Ownable {
         }
         uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
         uint256 xttReward = multiplier.mul(xttPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
-		// Do not need to mint more tokens
-		// cake.mint(devaddr, cakeReward.div(10));
+        /*
+        Modified
+        Do not need to mint more tokens
+        */
+        // cake.mint(devaddr, cakeReward.div(10));
         // cake.mint(address(syrup), cakeReward);
+        /*
+        End modified
+        */	
   
         pool.accXttPerShare = pool.accXttPerShare.add(xttReward.mul(1e12).div(lpSupply));
         pool.lastRewardBlock = block.number;
@@ -287,8 +288,15 @@ contract MasterChef is Ownable {
             user.amount = user.amount.add(_amount);
         }
         user.rewardDebt = user.amount.mul(pool.accXttPerShare).div(1e12);
-		// Do not need to mint this token
+        /*
+        Modified
+		Do not need to mint this token
+        */
         // syrup.mint(msg.sender, _amount);
+        /*
+        End modified
+        */
+
         emit Deposit(msg.sender, 0, _amount);
     }
 
@@ -307,8 +315,14 @@ contract MasterChef is Ownable {
             pool.lpToken.safeTransfer(address(msg.sender), _amount);
         }
         user.rewardDebt = user.amount.mul(pool.accXttPerShare).div(1e12);
-		// Do not need to burn this token
+        /*
+        Modified
+		Do not need to burn this token
+        */
         // syrup.burn(msg.sender, _amount);
+        /*
+        End modified
+        */
         emit Withdraw(msg.sender, 0, _amount);
     }
 
