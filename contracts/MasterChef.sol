@@ -47,6 +47,17 @@ contract MasterChef is Ownable {
         uint256 allocPoint;       // How many allocation points assigned to this pool. XTTs to distribute per block.
         uint256 lastRewardBlock;  // Last block number that XTTs distribution occurs.
         uint256 accXttPerShare; // Accumulated XTTs per share, times 1e12. See below.
+        uint256 executeTimestamp; // Timestamp to execute adding pool
+        bool withUpdate;
+        bool executed;
+    }
+    
+    struct PoolAllocPointInfo {
+        uint256 pid;       // Pool id
+        uint256 allocPoint;  // How many allocation points assigned to this pool. XTTs to distribute per block.
+        uint256 executeTimestamp; // Timestamp to execute adding pool
+        bool withUpdate;
+        bool executed;
     }
 
     // The XTT TOKEN!
@@ -56,21 +67,36 @@ contract MasterChef is Ownable {
     uint256 public xttPerBlock;
     // Bonus muliplier for early xtt makers.
     uint256 public BONUS_MULTIPLIER = 1;
+    // Store new value and execute when the time comes
+    uint256 public NEW_BONUS_MULTIPLIER = 1;
+    uint256 public NEW_BONUS_MULTIPLIER_TIMESTAMP = 0;
+    
     // The migrator contract. It has a lot of power. Can only be set through governance (owner).
     IMigratorChef public migrator;
+    IMigratorChef public newMigrator;
+    uint256 public newMigratorExecuteTimestamp = 0;
+    
 
     // Info of each pool.
     PoolInfo[] public poolInfo;
+    PoolInfo[] public waitingPoolInfo; // Pools are waiting to add
+    PoolAllocPointInfo[] public poolAllocPointInfo; // Pools are waiting to update allocPoint
     // Info of each user that stakes LP tokens.
     mapping (uint256 => mapping (address => UserInfo)) public userInfo;
     // Total allocation points. Must be the sum of all allocation points in all pools.
     uint256 public totalAllocPoint = 0;
     // The block number when XTT mining starts.
     uint256 public startBlock;
+    
+    
+    uint256 public constant MIN_TIME_LOCK_PERIOD = 24 hours; // 1 days
+    
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
     event EmergencyWithdraw(address indexed user, uint256 indexed pid, uint256 amount);
+    event SetMigrator(address indexed user, IMigratorChef migrator);
+    event UpdateMultiplier(address indexed user, uint256 multiplierNumber);
 
     constructor(
 		// We will use XTT instead of CakeToken
@@ -97,15 +123,33 @@ contract MasterChef is Ownable {
             lpToken: _xtt,
             allocPoint: 1000,
             lastRewardBlock: startBlock,
-            accXttPerShare: 0
+            accXttPerShare: 0,
+            executeTimestamp: block.timestamp,
+            withUpdate: false,
+            executed: true
         }));
 
         totalAllocPoint = 1000;
 
     }
 
-    function updateMultiplier(uint256 multiplierNumber) public onlyOwner {
-        BONUS_MULTIPLIER = multiplierNumber;
+    function updateMultiplier(uint256 multiplierNumber, uint256 executeTimestamp) external onlyOwner {
+        // Check the time
+        require(
+            executeTimestamp >= block.timestamp.add(MIN_TIME_LOCK_PERIOD),
+            "executeTimestamp cannot be sooner than MIN_TIME_LOCK_PERIOD"
+        );
+        
+        if(NEW_BONUS_MULTIPLIER_TIMESTAMP > 0 && block.timestamp >= NEW_BONUS_MULTIPLIER_TIMESTAMP){
+            if(BONUS_MULTIPLIER != NEW_BONUS_MULTIPLIER){
+                BONUS_MULTIPLIER = NEW_BONUS_MULTIPLIER;
+            }
+        }
+        
+        NEW_BONUS_MULTIPLIER = multiplierNumber;
+        NEW_BONUS_MULTIPLIER_TIMESTAMP = executeTimestamp;
+        
+        emit UpdateMultiplier(msg.sender, multiplierNumber);
     }
 
     function poolLength() external view returns (uint256) {
@@ -114,33 +158,131 @@ contract MasterChef is Ownable {
 
     // Add a new lp to the pool. Can only be called by the owner.
     // XXX DO NOT add the same LP token more than once. Rewards will be messed up if you do.
-    function add(uint256 _allocPoint, IBEP20 _lpToken, bool _withUpdate) public onlyOwner {
-        if (_withUpdate) {
-            massUpdatePools();
-        }
-        uint256 lastRewardBlock = block.number > startBlock ? block.number : startBlock;
-        totalAllocPoint = totalAllocPoint.add(_allocPoint);
-        poolInfo.push(PoolInfo({
+    function add(uint256 _allocPoint, IBEP20 _lpToken, bool _withUpdate, uint256 _executeTimestamp) external onlyOwner {
+        require(
+            _executeTimestamp >= block.timestamp.add(MIN_TIME_LOCK_PERIOD),
+            "_executeTimestamp cannot be sooner than MIN_TIME_LOCK_PERIOD"
+        );
+        waitingPoolInfo.push(PoolInfo({
             lpToken: _lpToken,
             allocPoint: _allocPoint,
-            lastRewardBlock: lastRewardBlock,
-            accXttPerShare: 0
+            lastRewardBlock: 0,
+            accXttPerShare: 0,
+            executeTimestamp: _executeTimestamp,
+            withUpdate: _withUpdate,
+            executed: false
         }));
-        updateStakingPool();
+        
+    }
+    
+    // Add a new lp to the pool. Can only be called by the owner.
+    function executeAddPools() external onlyOwner {
+        uint256 length = waitingPoolInfo.length;
+        if(length > 0){
+            for (uint256 pid = 0; pid < length; ++pid) {
+                PoolInfo storage pool = waitingPoolInfo[pid];
+                if(!pool.executed && pool.executeTimestamp <= block.timestamp){
+                
+                    if (pool.withUpdate) {
+                        massUpdatePools();
+                    }
+                    uint256 lastRewardBlock = block.number > startBlock ? block.number : startBlock;
+                    totalAllocPoint = totalAllocPoint.add(pool.allocPoint);
+                    poolInfo.push(PoolInfo({
+                        lpToken: pool.lpToken,
+                        allocPoint: pool.allocPoint,
+                        lastRewardBlock: lastRewardBlock,
+                        accXttPerShare: 0,
+                        executeTimestamp: pool.executeTimestamp,
+                        withUpdate: pool.withUpdate,
+                        executed: true
+                    }));
+                    pool.executed = true;
+                    updateStakingPool();
+                    
+                    // Remove this item
+                    removeWaitingPool(pid);
+                    pid--;
+                    length--;   
+                }
+                
+            }    
+        }
+        
     }
 
+    function removeWaitingPool(uint index)  internal onlyOwner {
+        if (index >= waitingPoolInfo.length) return;
+
+        for (uint i = index; i<waitingPoolInfo.length-1; i++){
+            waitingPoolInfo[i] = waitingPoolInfo[i+1];
+        }
+        waitingPoolInfo.pop();
+        //delete waitingPoolInfo[waitingPoolInfo.length-1];
+    }
+
+
+
     // Update the given pool's XTT allocation point. Can only be called by the owner.
-    function set(uint256 _pid, uint256 _allocPoint, bool _withUpdate) public onlyOwner {
-        if (_withUpdate) {
-            massUpdatePools();
+    function set(uint256 _pid, uint256 _allocPoint, bool _withUpdate, uint256 _executeTimestamp) external onlyOwner {
+         require(
+            _executeTimestamp >= block.timestamp.add(MIN_TIME_LOCK_PERIOD),
+            "_executeTimestamp cannot be sooner than MIN_TIME_LOCK_PERIOD"
+        );
+        
+        poolAllocPointInfo.push(PoolAllocPointInfo({
+            pid: _pid,
+            allocPoint: _allocPoint,
+            executeTimestamp: _executeTimestamp,
+            withUpdate: _withUpdate,
+            executed: false
+        }));
+    }
+    
+    // Update the given pool's XTT allocation point. Can only be called by the owner.
+    function executeUpdateAllocPoint() external onlyOwner {
+        
+        uint256 length = poolAllocPointInfo.length;
+        if(length > 0){
+            for (uint256 index = 0; index < length; ++index) {
+                PoolAllocPointInfo storage poolAllocPoint = poolAllocPointInfo[index];
+                if(!poolAllocPoint.executed && poolAllocPoint.executeTimestamp <= block.timestamp){
+                    if (poolAllocPoint.withUpdate) {
+                        massUpdatePools();
+                    }else{
+                        updatePool(poolAllocPoint.pid);
+                    }
+            	  
+                    uint256 prevAllocPoint = poolInfo[poolAllocPoint.pid].allocPoint;
+                    if (prevAllocPoint != poolAllocPoint.allocPoint) {
+                        poolInfo[poolAllocPoint.pid].allocPoint = poolAllocPoint.allocPoint;
+                        totalAllocPoint = totalAllocPoint.sub(prevAllocPoint).add(poolAllocPoint.allocPoint);
+                        updateStakingPool();
+                    }
+                    
+                    poolAllocPoint.executed = true;
+                    
+                    
+                    // Remove this item
+                    
+                    removeAllocPoint(index);
+                    index--;
+                    length--;
+                }
+                
+            }
         }
-	  
-        uint256 prevAllocPoint = poolInfo[_pid].allocPoint;
-        poolInfo[_pid].allocPoint = _allocPoint;
-        if (prevAllocPoint != _allocPoint) {
-            totalAllocPoint = totalAllocPoint.sub(prevAllocPoint).add(_allocPoint);
-            updateStakingPool();
+        
+    }
+    
+    function removeAllocPoint(uint index)  internal onlyOwner {
+        if (index >= poolAllocPointInfo.length) return;
+
+        for (uint i = index; i<poolAllocPointInfo.length-1; i++){
+            poolAllocPointInfo[i] = poolAllocPointInfo[i+1];
         }
+        poolAllocPointInfo.pop();
+        //delete poolAllocPointInfo[poolAllocPointInfo.length-1];
     }
 
     function updateStakingPool() internal {
@@ -157,12 +299,30 @@ contract MasterChef is Ownable {
     }
 
     // Set the migrator contract. Can only be called by the owner.
-    function setMigrator(IMigratorChef _migrator) public onlyOwner {
-        migrator = _migrator;
+    function setMigrator(IMigratorChef _migrator, uint256 _executeTimestamp) external onlyOwner {
+        require(
+            _executeTimestamp >= block.timestamp.add(MIN_TIME_LOCK_PERIOD),
+            "_executeTimestamp cannot be sooner than MIN_TIME_LOCK_PERIOD"
+        );
+        
+        newMigrator = _migrator;
+        newMigratorExecuteTimestamp = _executeTimestamp;
+        
+        emit SetMigrator(msg.sender, _migrator);
+    }
+    
+    // Execute Set the migrator contract. Can only be called by the owner.
+    function executeSetMigrator() external onlyOwner {
+        if(newMigratorExecuteTimestamp > 0 && newMigratorExecuteTimestamp <= block.timestamp){
+            migrator = newMigrator;
+            newMigratorExecuteTimestamp = 0;
+            emit SetMigrator(msg.sender, newMigrator);
+        }
     }
 
+
     // Migrate lp token to another lp contract. Can be called by anyone. We trust that migrator contract is good.
-    function migrate(uint256 _pid) public {
+    function migrate(uint256 _pid) external {
         require(address(migrator) != address(0), "migrate: no migrator");
         PoolInfo storage pool = poolInfo[_pid];
         IBEP20 lpToken = pool.lpToken;
@@ -175,6 +335,11 @@ contract MasterChef is Ownable {
 
     // Return reward multiplier over the given _from to _to block.
     function getMultiplier(uint256 _from, uint256 _to) public view returns (uint256) {
+        // Check to update new value
+        if(NEW_BONUS_MULTIPLIER_TIMESTAMP > 0 && block.timestamp >= NEW_BONUS_MULTIPLIER_TIMESTAMP){
+            return _to.sub(_from).mul(NEW_BONUS_MULTIPLIER);
+        }
+        
         return _to.sub(_from).mul(BONUS_MULTIPLIER);
     }
 
@@ -229,7 +394,7 @@ contract MasterChef is Ownable {
     }
 
     // Deposit LP tokens to MasterChef for XTT allocation.
-    function deposit(uint256 _pid, uint256 _amount) public {
+    function deposit(uint256 _pid, uint256 _amount) external {
 
         require (_pid != 0, 'deposit XTT by staking');
 
@@ -251,7 +416,7 @@ contract MasterChef is Ownable {
     }
 
     // Withdraw LP tokens from MasterChef.
-    function withdraw(uint256 _pid, uint256 _amount) public {
+    function withdraw(uint256 _pid, uint256 _amount) external {
 
         require (_pid != 0, 'withdraw XTT by unstaking');
 
@@ -273,7 +438,7 @@ contract MasterChef is Ownable {
     }
 
     // Stake XTT tokens to MasterChef
-    function enterStaking(uint256 _amount) public {
+    function enterStaking(uint256 _amount) external {
         PoolInfo storage pool = poolInfo[0];
         UserInfo storage user = userInfo[0][msg.sender];
         updatePool(0);
@@ -301,7 +466,7 @@ contract MasterChef is Ownable {
     }
 
     // Withdraw XTT tokens from STAKING.
-    function leaveStaking(uint256 _amount) public {
+    function leaveStaking(uint256 _amount) external {
         PoolInfo storage pool = poolInfo[0];
         UserInfo storage user = userInfo[0][msg.sender];
         require(user.amount >= _amount, "withdraw: not good");
@@ -327,7 +492,7 @@ contract MasterChef is Ownable {
     }
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
-    function emergencyWithdraw(uint256 _pid) public {
+    function emergencyWithdraw(uint256 _pid) external {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         pool.lpToken.safeTransfer(address(msg.sender), user.amount);
@@ -341,10 +506,3 @@ contract MasterChef is Ownable {
         xtt.safeTransfer(_to, _amount);
     }
 }
-
-  
-  
-  
-  
-  
- 
