@@ -90,6 +90,7 @@ contract MasterChef is Ownable {
     
     
     uint256 public constant MIN_TIME_LOCK_PERIOD = 24 hours; // 1 days
+    uint256 public constant MAX_ARRAY_LENGTH = 100; // 100 elements
     
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
@@ -163,6 +164,12 @@ contract MasterChef is Ownable {
             _executeTimestamp >= block.timestamp.add(MIN_TIME_LOCK_PERIOD),
             "_executeTimestamp cannot be sooner than MIN_TIME_LOCK_PERIOD"
         );
+        
+        require(
+            waitingPoolInfo.length < MAX_ARRAY_LENGTH,
+            "Please call executeAddPools function to process adding previous pools before adding more pools"
+        );
+        
         waitingPoolInfo.push(PoolInfo({
             lpToken: _lpToken,
             allocPoint: _allocPoint,
@@ -225,9 +232,14 @@ contract MasterChef is Ownable {
 
     // Update the given pool's XTT allocation point. Can only be called by the owner.
     function set(uint256 _pid, uint256 _allocPoint, bool _withUpdate, uint256 _executeTimestamp) external onlyOwner {
-         require(
+        require(
             _executeTimestamp >= block.timestamp.add(MIN_TIME_LOCK_PERIOD),
             "_executeTimestamp cannot be sooner than MIN_TIME_LOCK_PERIOD"
+        );
+        
+        require(
+            poolAllocPointInfo.length < MAX_ARRAY_LENGTH,
+            "Please call executeUpdateAllocPoint function to process previous data before updating more pools"
         );
         
         poolAllocPointInfo.push(PoolAllocPointInfo({
