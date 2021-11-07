@@ -34,11 +34,11 @@ contract SmartChef is Ownable {
     }
     
     // Smart Chain
-    
     IBEP20 public tokenBUSD = IBEP20(0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56);
     IBEP20 public tokenUSDT = IBEP20(0x55d398326f99059fF775485246999027B3197955);
     IBEP20 public tokenUSDC = IBEP20(0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d);
     IBEP20 public tokenDAI = IBEP20(0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3);
+   
 
     // The XTT TOKEN!
     IBEP20 public syrup;
@@ -70,7 +70,8 @@ contract SmartChef is Ownable {
     uint256 public newMinDepositAmount;
     uint256 public newMinDepositAmountTimestamp;
 
-    uint256 public constant MIN_TIME_LOCK_PERIOD = 24 hours; // 1 days
+    //uint256 public constant MIN_TIME_LOCK_PERIOD = 24 hours; // 1 days
+    uint256 public constant MIN_TIME_LOCK_PERIOD = 1 minutes; // 1 days
 
     event Deposit(address indexed user, uint256 amount);
     event Withdraw(address indexed user, uint256 amount);
@@ -403,6 +404,12 @@ contract SmartChef is Ownable {
             rewardToken.safeTransfer(address(msg.sender), pending);
         }
         if (_amount > 0) {
+            /*
+            require(
+                ((user.amount == _amount) || (user.amount - _amount >= getMinDepositAmount())),
+                "You can withdraw all or your remain stake amount must be greater than minDepositAmount"
+            );
+            */
             user.amount = user.amount.sub(_amount);
             pool.lpToken.safeTransfer(address(msg.sender), _amount);
             
@@ -413,12 +420,14 @@ contract SmartChef is Ownable {
     }
     
     function getTotalSupply() internal view returns (uint256) {
+        //PoolInfo storage pool = poolInfo[0];
+        //return pool.lpToken.balanceOf(address(this));
         uint256 totalSupply = 0;
         uint256 length = userList.length;
         for (uint256 id = 0; id < length; ++id) {
             UserInfo storage user = userInfo[userList[id]];
             if(user.amount >= getMinDepositAmount()){
-                totalSupply += user.amount;
+                totalSupply = totalSupply.add(user.amount);
             }
         }
         
@@ -448,16 +457,16 @@ contract SmartChef is Ownable {
             if(user.amount >= getMinDepositAmount()){
                 uint256 pendingRewards = user.amount.mul(1e12).div(totalSupply).mul(_amount).div(1e12);
                 if(keccak256(abi.encodePacked(_tokenSymbol)) == keccak256(abi.encodePacked("BUSD"))){
-                    user.rewardBUSD += pendingRewards;
+                    user.rewardBUSD = user.rewardBUSD.add(pendingRewards);
                 }else if(keccak256(abi.encodePacked(_tokenSymbol)) == keccak256(abi.encodePacked("USDT"))){
-                    user.rewardUSDT += pendingRewards;
+                    user.rewardUSDT = user.rewardUSDT.add(pendingRewards);
                 }else if(keccak256(abi.encodePacked(_tokenSymbol)) == keccak256(abi.encodePacked("USDC"))){
-                    user.rewardUSDC += pendingRewards;
+                    user.rewardUSDC = user.rewardUSDC.add(pendingRewards);
                 }else if(keccak256(abi.encodePacked(_tokenSymbol)) == keccak256(abi.encodePacked("DAI"))){
-                    user.rewardDAI += pendingRewards;
+                    user.rewardDAI = user.rewardDAI.add(pendingRewards);
                 }else if(keccak256(abi.encodePacked(_tokenSymbol)) == keccak256(abi.encodePacked("XTT-b20"))){
-                    user.amount += pendingRewards;
-                    user.rewardDebtXTT += pendingRewards;
+                    user.amount = user.amount.add(pendingRewards);
+                    user.rewardDebtXTT = user.rewardDebtXTT.add(pendingRewards);
                 }
             }
         }   
@@ -471,28 +480,28 @@ contract SmartChef is Ownable {
         if(keccak256(abi.encodePacked(_tokenSymbol)) == keccak256(abi.encodePacked("BUSD"))){
             require(user.rewardBUSD > 0, "withdraw: not good");
             tokenBUSD.safeTransfer(address(msg.sender), user.rewardBUSD);
-            user.rewardDebtBUSD += user.rewardBUSD;
+            user.rewardDebtBUSD = user.rewardDebtBUSD.add(user.rewardBUSD);
             amount = user.rewardBUSD;
             user.rewardBUSD = 0;
             emit Withdraw(msg.sender, amount);  
         }else if(keccak256(abi.encodePacked(_tokenSymbol)) == keccak256(abi.encodePacked("USDT"))){
             require(user.rewardUSDT > 0, "withdraw: not good");
             tokenUSDT.safeTransfer(address(msg.sender), user.rewardUSDT);
-            user.rewardDebtUSDT += user.rewardUSDT;
+            user.rewardDebtUSDT = user.rewardDebtUSDT.add(user.rewardUSDT);
             amount = user.rewardUSDT;
             user.rewardUSDT = 0;
             emit Withdraw(msg.sender, amount);
         }else if(keccak256(abi.encodePacked(_tokenSymbol)) == keccak256(abi.encodePacked("USDC"))){
             require(user.rewardUSDC > 0, "withdraw: not good");
             tokenUSDC.safeTransfer(address(msg.sender), user.rewardUSDC);
-            user.rewardDebtUSDC += user.rewardUSDC;
+            user.rewardDebtUSDC = user.rewardDebtUSDC.add(user.rewardUSDC);
             amount = user.rewardUSDC;
             user.rewardUSDC = 0;
             emit Withdraw(msg.sender, amount);
         }else if(keccak256(abi.encodePacked(_tokenSymbol)) == keccak256(abi.encodePacked("DAI"))){
             require(user.rewardDAI > 0, "withdraw: not good");
             tokenDAI.safeTransfer(address(msg.sender), user.rewardDAI);
-            user.rewardDebtDAI += user.rewardDAI;
+            user.rewardDebtDAI = user.rewardDebtDAI.add(user.rewardDAI);
             amount = user.rewardDAI;
             user.rewardDAI = 0;
             emit Withdraw(msg.sender, amount);
