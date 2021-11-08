@@ -70,8 +70,7 @@ contract SmartChef is Ownable {
     uint256 public newMinDepositAmount;
     uint256 public newMinDepositAmountTimestamp;
 
-    //uint256 public constant MIN_TIME_LOCK_PERIOD = 24 hours; // 1 days
-    uint256 public constant MIN_TIME_LOCK_PERIOD = 1 minutes; // 1 days
+    uint256 public constant MIN_TIME_LOCK_PERIOD = 24 hours; // 1 days
 
     event Deposit(address indexed user, uint256 amount);
     event Withdraw(address indexed user, uint256 amount);
