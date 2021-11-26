@@ -33,13 +33,11 @@ contract SmartChef is Ownable {
         uint256 accXttPerShare; // Accumulated XTTs per share, times 1e12. See below.
     }
     
-    // Smart Chain
     IBEP20 public tokenBUSD = IBEP20(0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56);
     IBEP20 public tokenUSDT = IBEP20(0x55d398326f99059fF775485246999027B3197955);
     IBEP20 public tokenUSDC = IBEP20(0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d);
     IBEP20 public tokenDAI = IBEP20(0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3);
-   
-
+    
     // The XTT TOKEN!
     IBEP20 public syrup;
     IBEP20 public rewardToken;
@@ -53,7 +51,7 @@ contract SmartChef is Ownable {
     PoolInfo[] public poolInfo;
     // Info of each user that stakes LP tokens.
     mapping(address => UserInfo) public userInfo;
-    mapping(address => bool) userExists;
+    mapping(address => bool) public userExists;
     address [] public userList;
     // Total allocation poitns. Must be the sum of all allocation points in all pools.
     uint256 private totalAllocPoint = 0;
@@ -70,6 +68,9 @@ contract SmartChef is Ownable {
     uint256 public newMinDepositAmount;
     uint256 public newMinDepositAmountTimestamp;
 
+    uint256 public maxNumberStakingHolders = 1e4;
+    uint256 public constant MAX_NUMBER_STAKING_HOLDERS = 1e4;
+
     uint256 public constant MIN_TIME_LOCK_PERIOD = 24 hours; // 1 days
 
     event Deposit(address indexed user, uint256 amount);
@@ -85,6 +86,7 @@ contract SmartChef is Ownable {
     event NewRewardPerBlock(address indexed user, uint256 rewardPerBlock);
     event NewMinDepositAmount(address indexed user, uint256 minDepositAmount);
     event NewRewardDistribution(address indexed user, uint256 amount, string tokenSymbol);
+    event NewMaxNumberStakingHolders(address indexed user, uint256 maxNumberStakingHolders);
 
     constructor(
         IBEP20 _syrup,
@@ -116,6 +118,17 @@ contract SmartChef is Ownable {
 
     function stopReward() external onlyOwner {
         bonusEndBlock = block.number;
+    }
+
+    function updateMaxNumberStakingHolders(
+        uint256 _maxNumberStakingHolders
+    ) external onlyOwner {
+         require(
+            _maxNumberStakingHolders <= MAX_NUMBER_STAKING_HOLDERS,
+            "_maxNumberStakingHolders cannot be greater than MAX_NUMBER_STAKING_HOLDERS"
+        );
+        maxNumberStakingHolders =_maxNumberStakingHolders;
+        emit NewMaxNumberStakingHolders(msg.sender, _maxNumberStakingHolders);
     }
 
     function updateRewardPerBlock(
@@ -355,6 +368,10 @@ contract SmartChef is Ownable {
 
     // Stake SYRUP tokens to SmartChef
     function deposit(uint256 _amount) external {
+        require(
+                userExists[msg.sender] || userList.length < maxNumberStakingHolders,
+                "There is no slot for new staking holder"
+            );
         PoolInfo storage pool = poolInfo[0];
         UserInfo storage user = userInfo[msg.sender];
         updatePool(0);
@@ -380,7 +397,6 @@ contract SmartChef is Ownable {
             );
             user.amount = user.amount.add(_amount);
             if(!userExists[msg.sender]){
-                //userList.push(msg.sender) -1;
                 userList.push(msg.sender);
                 userExists[msg.sender] = true;
             }
@@ -403,19 +419,42 @@ contract SmartChef is Ownable {
             rewardToken.safeTransfer(address(msg.sender), pending);
         }
         if (_amount > 0) {
-            /*
             require(
                 ((user.amount == _amount) || (user.amount - _amount >= getMinDepositAmount())),
                 "You can withdraw all or your remain stake amount must be greater than minDepositAmount"
             );
-            */
+
             user.amount = user.amount.sub(_amount);
             pool.lpToken.safeTransfer(address(msg.sender), _amount);
+
+            if(user.amount == 0){
+                updateUserList(msg.sender);
+                userExists[msg.sender] = false;
+            }
             
         }
         user.rewardDebt = user.amount.mul(pool.accXttPerShare).div(1e12);
 
         emit Withdraw(msg.sender, _amount);
+    }
+
+    function updateUserList(address userAddress) internal{
+        if(userExists[msg.sender]){
+            address[] memory newUserListArray =  new address[](userList.length-1);
+            bool foundIndex = false;
+            for (uint i = 0; i < userList.length-1; i++){
+                if(userList[i] == userAddress){
+                    foundIndex = true;
+                }else{
+                    if(foundIndex){
+                        newUserListArray[i-1] = userList[i];
+                    }else{
+                        newUserListArray[i] = userList[i];
+                    }
+                }
+            }
+            userList = newUserListArray;
+        }
     }
     
     function getTotalSupply() internal view returns (uint256) {
