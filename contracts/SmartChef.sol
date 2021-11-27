@@ -37,7 +37,8 @@ contract SmartChef is Ownable {
     IBEP20 public tokenUSDT = IBEP20(0x55d398326f99059fF775485246999027B3197955);
     IBEP20 public tokenUSDC = IBEP20(0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d);
     IBEP20 public tokenDAI = IBEP20(0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3);
-    
+
+
     // The XTT TOKEN!
     IBEP20 public syrup;
     IBEP20 public rewardToken;
@@ -46,6 +47,13 @@ contract SmartChef is Ownable {
     uint256 public rewardPerBlock;
     uint256 public newRewardPerBlock;
     uint256 public newRewardPerBlockTimestamp = 0;
+
+    // Total token rewarded
+    uint256 public rewardedBUSD = 0; // rewarded in BUSD
+    uint256 public rewardedUSDT = 0; // rewarded in USDT
+    uint256 public rewardedUSDC = 0; // rewarded in USDC
+    uint256 public rewardedDAI = 0;  // rewarded in DAI
+    uint256 public rewardedXTT = 0;  // rewarded in XTT
 
     // Info of each pool.
     PoolInfo[] public poolInfo;
@@ -477,14 +485,19 @@ contract SmartChef is Ownable {
         
         if(keccak256(abi.encodePacked(_tokenSymbol)) == keccak256(abi.encodePacked("BUSD"))){
             require(tokenBUSD.balanceOf(address(this)) >= _amount, "Not enough BUSD");
+            rewardedBUSD = rewardedBUSD.add(_amount);
         }else if(keccak256(abi.encodePacked(_tokenSymbol)) == keccak256(abi.encodePacked("USDT"))){
             require(tokenUSDT.balanceOf(address(this)) >= _amount, "Not enough USDT");
+            rewardedUSDT = rewardedUSDT.add(_amount);
         }else if(keccak256(abi.encodePacked(_tokenSymbol)) == keccak256(abi.encodePacked("USDC"))){
             require(tokenUSDC.balanceOf(address(this)) >= _amount, "Not enough USDC");
+            rewardedUSDC = rewardedUSDC.add(_amount);
         }else if(keccak256(abi.encodePacked(_tokenSymbol)) == keccak256(abi.encodePacked("DAI"))){
             require(tokenDAI.balanceOf(address(this)) >= _amount, "Not enough DAI");
+            rewardedDAI = rewardedDAI.add(_amount);
         }else if(keccak256(abi.encodePacked(_tokenSymbol)) == keccak256(abi.encodePacked("XTT-b20"))){
             require(_amount > 0, "_amount must be greater than 0");
+            rewardedXTT = rewardedXTT.add(_amount);
         }
         
         
