@@ -566,6 +566,11 @@ contract SmartChef is Ownable {
         pool.lpToken.safeTransfer(address(msg.sender), user.amount);
         user.amount = 0;
         user.rewardDebt = 0;
+
+        // Remove from user list
+        updateUserList(msg.sender);
+        userExists[msg.sender] = false;
+
         emit EmergencyWithdraw(msg.sender, user.amount);
     }
 
